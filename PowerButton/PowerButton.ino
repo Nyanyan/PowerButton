@@ -22,13 +22,21 @@
 // json
 StaticJsonDocument<1024> doc;
 
-void init_wifi(){
-  WiFi.begin(WIFI_SSID, WIFI_PASS);
-  while (WiFi.status() != WL_CONNECTED) {
-    Serial.print(".");
-    delay(100);
+void init_wifi() {
+  for (;;) {
+    unsigned long strt = millis();
+    WiFi.begin(WIFI_SSID, WIFI_PASS);
+    Serial.println("WiFi starting");
+    while (millis() - strt < 10000) {
+      Serial.print(".");
+      if (WiFi.status() == WL_CONNECTED) {
+        Serial.println("WiFi connected");
+        return;
+      }
+      delay(100);
+    }
+    Serial.println("timeout");
   }
-  Serial.println("WiFi connected");
 }
 
 
