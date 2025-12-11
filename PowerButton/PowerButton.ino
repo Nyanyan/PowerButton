@@ -22,6 +22,11 @@
 // json
 StaticJsonDocument<1024> doc;
 
+bool off_to_on_alert = true;
+bool on_to_off_alert = true;
+
+bool led_state = false;
+
 void init_wifi() {
   for (;;) {
     unsigned long strt = millis();
@@ -125,11 +130,31 @@ String command_info =
 "commands:\n"
 "- press (p)\n"
 "- longpress (lp)\n"
-"- checkled (cl)\n"
-"- help (?)\n";
+"- checkstate (cs)\n"
+"- help (?)\n"
+"- offtoon (ofton)\n"
+"- ontooff (ontof)\n"
+;
 
 
 void loop() {
+  bool new_led_state = (digitalRead(POWER_LED_PIN) == POWER_LED_ON);
+  if (led_state == false && new_led_state == true) {
+    if (off_to_on_alert) {
+      slack_send_message("<!channel>\noff to ON");
+    } else {
+      slack_send_message("off to ON");
+    }
+  }
+  if (led_state == true && new_led_state == false) {
+    if (on_to_off_alert) {
+      slack_send_message("<!channel>\nON to off");
+    } else {
+      slack_send_message("ON to off");
+    }
+  }
+  led_state = new_led_state;
+
   String last_message = slack_get_message();
   if (last_message == "press" || last_message == "p") { // press button
     digitalWrite(POWER_BUTTON_PIN, HIGH);
@@ -141,15 +166,34 @@ void loop() {
     delay(10000);
     digitalWrite(POWER_BUTTON_PIN, LOW);
     slack_send_message("button long-pressed");
-  } else if (last_message == "checkled" || last_message == "cl") { // check LED
-    if (digitalRead(POWER_LED_PIN) == POWER_LED_ON) {
-      slack_send_message("LED on");
+  } else if (last_message == "checkstate" || last_message == "cs") { // check state
+    String message = "";
+    if (led_state) {
+      message += "LED: ON";
     } else {
-      slack_send_message("LED off");
+      message += "LED: off";
     }
+    message += "\n";
+    if (off_to_on_alert) {
+      message += "off to ON: ABLED";
+    } else {
+      message += "off to ON: disabled";
+    }
+    message += "\n";
+    if (on_to_off_alert) {
+      message += "ON to off: ABLED";
+    } else {
+      message += "ON to off: disabled";
+    }
+    slack_send_message(message);
   } else if (last_message == "help" || last_message == "?") { // help
     slack_send_message(command_info);
+  } else if (last_message == "offtoon" || last_message == "ofton") { // off to on
+    off_to_on_alert = !off_to_on_alert;
+  } else if (last_message == "ontooff" || last_message == "ontof") { // on to off
+    on_to_off_alert = !on_to_off_alert;
   }
+
   delay(10000);
 
   // Serial.println(digitalRead(POWER_LED_PIN));
