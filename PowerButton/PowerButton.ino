@@ -190,8 +190,22 @@ void loop() {
     slack_send_message(command_info);
   } else if (last_message == "offtoon" || last_message == "ofton") { // off to on
     off_to_on_alert = !off_to_on_alert;
+    String message = "off to ON alert: ";
+    if (off_to_on_alert) {
+      message += "ABLED";
+    } else {
+      message += "disabled";
+    }
+    slack_send_message(message);
   } else if (last_message == "ontooff" || last_message == "ontof") { // on to off
     on_to_off_alert = !on_to_off_alert;
+    String message = "ON to off alert: ";
+    if (on_to_off_alert) {
+      message += "ABLED";
+    } else {
+      message += "disabled";
+    }
+    slack_send_message(message);
   }
 
   delay(10000);
