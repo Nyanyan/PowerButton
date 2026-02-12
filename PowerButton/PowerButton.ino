@@ -27,7 +27,44 @@ bool on_to_off_alert = true;
 
 bool led_state = false;
 
+// track repeated HTTP errors to trigger self-recovery
+uint8_t consecutive_http_failures = 0;
+
+bool ensure_wifi_connected(unsigned long timeout_ms = 10000) {
+  if (WiFi.status() == WL_CONNECTED) {
+    return true;
+  }
+
+  Serial.println("WiFi disconnected, reconnecting");
+  WiFi.disconnect(true);
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
+
+  unsigned long start = millis();
+  while (millis() - start < timeout_ms) {
+    if (WiFi.status() == WL_CONNECTED) {
+      Serial.println("WiFi reconnected");
+      return true;
+    }
+    delay(200);
+  }
+
+  Serial.println("WiFi reconnect timeout");
+  return false;
+}
+
+void recover_network_if_needed() {
+  if (consecutive_http_failures >= 3 || WiFi.status() != WL_CONNECTED) {
+    Serial.println("Network unstable, forcing re-init");
+    init_wifi();
+    consecutive_http_failures = 0;
+  }
+}
+
 void init_wifi() {
+  WiFi.mode(WIFI_STA);
+  WiFi.setAutoReconnect(true);
+  WiFi.persistent(false);
+
   for (;;) {
     unsigned long strt = millis();
     WiFi.begin(WIFI_SSID, WIFI_PASS);
@@ -47,8 +84,14 @@ void init_wifi() {
 
 
 String slack_get_message() {
+  if (!ensure_wifi_connected()) {
+    return "";
+  }
+
   HTTPClient http;
   String res;
+
+  http.setTimeout(5000);
 
   if (http.begin(SLACK_URL_RECEIVE)) {
     http.addHeader("Content-Type", "application/x-www-form-urlencoded");
@@ -61,12 +104,19 @@ String slack_get_message() {
       deserializeJson(doc, raw_json);
       const char* text = doc["messages"][0]["text"];
       res = text;
+      consecutive_http_failures = 0;
     } else{
       Serial.printf("[HTTPS] POST... failed, error: %s\n", http.errorToString(status_code).c_str());
+      if (consecutive_http_failures < 10) {
+        consecutive_http_failures++;
+      }
     }
     http.end();
   } else {
     Serial.printf("[HTTPS] Unable to connect\n");
+    if (consecutive_http_failures < 10) {
+      consecutive_http_failures++;
+    }
   }
   return res;
 }
@@ -77,12 +127,17 @@ char* slack_send_message(String str){
   static char ts[20];
   char buf[2048];
 
+  if (!ensure_wifi_connected()) {
+    return "";
+  }
+
   // Slack Messaging API
   HTTPClient http;
   if (!http.begin(SLACK_URL_SEND)) {
     Serial.println(String("[ERROR] cannot begin ") + SLACK_URL_SEND);
     return "";
   }
+  http.setTimeout(5000);
   http.addHeader("Content-Type", "application/x-www-form-urlencoded");
 
   const char *str_c = str.c_str();
@@ -108,8 +163,12 @@ char* slack_send_message(String str){
       strcpy(ts, doc["ts"]);
       Serial.println(ts);
     }
+    consecutive_http_failures = 0;
   } else {
     Serial.printf("ERR %d", status_code);
+    if (consecutive_http_failures < 10) {
+      consecutive_http_failures++;
+    }
   }
   http.end();
   return ts;
@@ -138,6 +197,8 @@ String command_info =
 
 
 void loop() {
+  recover_network_if_needed();
+
   bool new_led_state = (digitalRead(POWER_LED_PIN) == POWER_LED_ON);
   if (led_state == false && new_led_state == true) {
     if (off_to_on_alert) {
@@ -207,6 +268,8 @@ void loop() {
     }
     slack_send_message(message);
   }
+
+  recover_network_if_needed();
 
   delay(10000);
 
