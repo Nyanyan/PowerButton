@@ -36,16 +36,19 @@ bool ensure_wifi_connected(unsigned long timeout_ms = 10000) {
   }
 
   Serial.println("WiFi disconnected, reconnecting");
-  WiFi.disconnect(true);
-  WiFi.begin(WIFI_SSID, WIFI_PASS);
-
-  unsigned long start = millis();
-  while (millis() - start < timeout_ms) {
-    if (WiFi.status() == WL_CONNECTED) {
-      Serial.println("WiFi reconnected");
-      return true;
+  for (int i = 0; i < N_WIFI_LOGIN; ++i) {
+    WiFi.disconnect(true);
+    WiFi.begin(WIFI_LOGIN_DATA[i].ssid, WIFI_LOGIN_DATA[i].pass);
+    Serial.print("WiFi starting with ");
+    Serial.println(WIFI_LOGIN_DATA[i].ssid);
+    unsigned long start = millis();
+    while (millis() - start < timeout_ms) {
+      if (WiFi.status() == WL_CONNECTED) {
+        Serial.println("WiFi reconnected");
+        return true;
+      }
+      delay(200);
     }
-    delay(200);
   }
 
   Serial.println("WiFi reconnect timeout");
@@ -66,16 +69,20 @@ void init_wifi() {
   WiFi.persistent(false);
 
   for (;;) {
-    unsigned long strt = millis();
-    WiFi.begin(WIFI_SSID, WIFI_PASS);
-    Serial.println("WiFi starting");
-    while (millis() - strt < 10000) {
-      Serial.print(".");
-      if (WiFi.status() == WL_CONNECTED) {
-        Serial.println("WiFi connected");
-        return;
+    unsigned long timeout_ms = 10000;
+    for (int i = 0; i < N_WIFI_LOGIN; ++i) {
+      WiFi.disconnect(true);
+      WiFi.begin(WIFI_LOGIN_DATA[i].ssid, WIFI_LOGIN_DATA[i].pass);
+      Serial.print("WiFi starting with ");
+      Serial.println(WIFI_LOGIN_DATA[i].ssid);
+      unsigned long start = millis();
+      while (millis() - start < timeout_ms) {
+        if (WiFi.status() == WL_CONNECTED) {
+          Serial.println("WiFi reconnected");
+          return;
+        }
+        delay(200);
       }
-      delay(100);
     }
     Serial.println("timeout");
   }
